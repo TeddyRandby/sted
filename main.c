@@ -66,15 +66,15 @@ i32 main() {
 
   sted_v2_f64_t fs = {.f64s = {69, .420}};
 
-  fs = sted_v2_f64_add(fs, fs);
+  fs = sted_v2_f64_addv(fs, fs);
 
   printf("{ %lf, %lf }\n", fs.x, fs.y);
 
-  fs = sted_v2_f64_translate(fs, 69);
+  fs = sted_v2_f64_add(fs, 69);
 
   printf("{ %lf, %lf }\n", fs.x, fs.y);
 
-  fs = sted_v2_f64_scale(fs, 0.1);
+  fs = sted_v2_f64_mul(fs, 0.1);
 
   printf("{ %lf, %lf }\n", fs.x, fs.y);
 

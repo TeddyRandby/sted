@@ -7,12 +7,12 @@ include(GNUInstallDirs)
 add_library(
   sted SHARED
   src/sted.h
-  src/sted.c
 )
 
 set_target_properties(
   sted
   PROPERTIES
+  LINKER_LANGUAGE C
   VERSION 1
   SOVERSION 1
   PUBLIC_HEADER src/sted.h
