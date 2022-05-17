@@ -6,7 +6,7 @@
   Basic included utilities:
     - Buffers
     - Vectors
-    - Slices
+    - arrays
     - Typedefs
 */
 
@@ -31,67 +31,89 @@ typedef int64_t i64;
 typedef float f32;
 typedef double f64;
 
-/* ------------ HELPERS ------------ */
-i32 sted_fail(const char *file, const u32 line, const char *fmt);
+//////////////////////////////
+//                          //
+//          HELPERS         //
+//                          //
+//////////////////////////////
 
-#define sted_assert(expr, fmt) ((expr) ? 0 : sted_fail(__FILE__, __LINE__, fmt))
-
-#define sted_cast(type, ptr) ((type *)ptr)
-
-// Create an unsuccessful result
-#define sted_err(code) ((sted_result_t){.status = code})
-
-// Create a successful result with a value
-#define sted_ok(value) ((sted_result_t){.status = STED_OK, .data = value})
-
-// Crash if the result is not ok.
-#define sted_try(result)                                                       \
-  (sted_assert(result.status == STED_OK, "Status was not OK."))
-
-// Crash if the result is not ok.
-// Return the value, cast to the specified type.
-#define sted_unwrap(type, result)                                              \
-  ({                                                                           \
-    sted_result_t __res__ = (result);                                          \
-    assert(__res__.status == STED_OK);                                         \
-    (type *)(__res__.data);                                                    \
-  })
-
-#define sted_size(self) (self->kind->item_size)
-
-#define sted_alloc(kind, ptr, size)                                            \
-  ((kind)->allocator((kind), ptr, size * (kind)->item_size))
-
-#define sted_hash(kind, ptr) ((kind)->hasher((kind), ptr))
+#define cast(type, ptr) ((type *)ptr)
 
 #define true 1
+
 #define false 0
 
 #define function extern inline
 
-/* ------------ STATUS CODES ------------ */
-typedef enum sted_code_e {
-  STED_OK = 0,
-  STED_MEMORY_ERR,
-  STED_BOUNDS_ERR,
-  STED_CAST_ERR,
-  STED_WRAP_ERR,
-} sted_code_k;
+/* ------------ RUNTIME ASSERTION ------------ */
+i32 fail(const char *file, const u32 line, const char *fmt);
 
-typedef struct sted_result_s sted_result_t;
+#define check(expr, fmt) ((expr) ? 0 : fail(__FILE__, __LINE__, fmt))
+
+//////////////////////////////
+//                          //
+//          RESULTS         //
+//                          //
+//////////////////////////////
+
+// The struct result type.
+typedef struct result_s result_t;
+
+// Create an unsuccessful result
+#define err(code) ((result_t){.status = code})
+
+// Create a successful result with a value
+#define ok(value) ((result_t){.status = OK, .data = value})
+
+// Crash if the result is not ok.
+#define try(result) (check(result.status == OK, "Status was not OK."))
+
+// Crash if the result is not ok.
+// Return the value, cast to the specified type.
+#define unwrap(type, result)                                                   \
+  ({                                                                           \
+    result_t __res__ = (result);                                               \
+    check(__res__.status == OK, "Status was not OK.");                         \
+    (type *)(__res__.data);                                                    \
+  })
+
+// Possible error codes that can be returned by sted functions.
+typedef enum code_e {
+  OK = 0,
+  MEMORY_ERR,
+  BOUNDS_ERR,
+  CAST_ERR,
+  WRAP_ERR,
+} code_k;
+
+//////////////////////////////
+//                          //
+//      DATA STRUCTURES     //
+//                          //
+//////////////////////////////
 
 /* ------------ KINDS ------------ */
-typedef struct sted_kind_s sted_kind_t;
+typedef struct kind_s kind_t;
 
-typedef sted_result_t (*sted_mem_fn)(const sted_kind_t *, void *, u64);
+typedef result_t (*mem_fn)(const kind_t *, void *, u64);
 
-sted_result_t sted_mem_default(const sted_kind_t *kind, void *, u64 len);
+result_t mem_default(const kind_t *kind, void *, u64 len);
 
-typedef u64 (*sted_hash_fn)(const sted_kind_t *, void *);
+typedef u64 (*hash_fn)(const kind_t *, void *);
+
+#define size(self) (self->kind->item_size)
+
+#define alloc(kind, ptr, size)                                                 \
+  ((kind)->allocator((kind), ptr, size * (kind)->item_size))
+
+#define copy(kind, dest, src, size)                                            \
+  (memcpy(dest, src, size * (kind)->item_size))
+
+#define hash(kind, ptr) ((kind)->hasher((kind), ptr))
 
 /* ------------ VECTORS ------------ */
 // Macro for concatenating the vector type names easier.
-#define vec_name(type, size) sted_v##size##_##type##_t
+#define vec_name(type, size) v##size##_##type##_t
 
 // Util macro that calls the given macro for each vector type
 // passing the rest of the args along.
@@ -109,19 +131,17 @@ typedef u64 (*sted_hash_fn)(const sted_kind_t *, void *);
   vec_eachtype(macro, 4, __VA_ARGS__)
 
 #define vec_union_decl(type, size, args)                                       \
-  typedef union sted_##v##size##_##type##_s vec_name(type, size)
+  typedef union v##size##_##type##_s vec_name(type, size)
 
 #define vec_bin_decl(type, size, name)                                         \
-  vec_name(type, size) sted_##v##size##_##type##_##name##v(                    \
-      vec_name(type, size), vec_name(type, size))
+  vec_name(type, size)                                                         \
+      v##size##_##type##_##name##v(vec_name(type, size), vec_name(type, size))
 
 #define vec_constant_decl(type, size, name)                                    \
-  vec_name(type, size)                                                         \
-      sted_##v##size##_##type##_##name(vec_name(type, size), type)
+  vec_name(type, size) v##size##_##type##_##name(vec_name(type, size), type)
 
 #define vec_dot_decl(type, size, args)                                         \
-  type sted_##v##size##_##type##_##dot(vec_name(type, size),                   \
-                                       vec_name(type, size))
+  type v##size##_##type##_##dot(vec_name(type, size), vec_name(type, size))
 
 vec_eachtypesize(vec_union_decl);
 
@@ -139,62 +159,71 @@ vec_eachtypesize(vec_dot_decl);
 #undef vec_translate_decl
 #undef vec_scale_decl
 
-/* ------------ SLICES ------------ */
-typedef struct sted_slice_s sted_slice_t;
+/* ------------ ARRAYS ------------ */
+typedef struct array_s array_t;
 
-sted_result_t sted_slice_create(sted_kind_t *);
+result_t array_create(kind_t *);
 
-sted_result_t sted_slice_destroy(sted_slice_t *);
+result_t array_destroy(array_t *);
 
-sted_result_t sted_slice_emplace(sted_slice_t *, void *);
+result_t array_emplace(array_t *, void *);
 
-sted_result_t sted_slice_append(sted_slice_t *);
+result_t array_append(array_t *);
 
-sted_result_t sted_slice_pop(sted_slice_t *);
+result_t array_pop(array_t *);
 
-sted_result_t sted_slice_set(sted_slice_t *, u64, void *);
+result_t array_set(array_t *, u64, void *);
 
-sted_result_t sted_slice_get(sted_slice_t *, u64);
+result_t array_get(array_t *, u64);
 
-sted_result_t sted_slice_view(sted_slice_t *, u64, u64);
+result_t array_view(array_t *, u64, u64);
 
-#define sted_slice_each_as(s, var, body)                                       \
+#define array_each_as(s, var, body)                                            \
   for (u64 __i = 0; __i < s->len; __i++) {                                     \
-    void *var = s->data + __i * sted_size(s);                                  \
+    void *var = s->data + __i * size(s);                                       \
     body;                                                                      \
   }
+/* ------------ SLICES ------------ */
+
+typedef struct slice_s slice_t;
+
+result_t slice_create(kind_t *, const u8 *, u64);
+
+result_t slice_destroy(slice_t *);
+
+result_t slice_get(slice_t *, u64);
 
 /* ------------ VIEWS ------------ */
-typedef struct sted_view_s sted_view_t;
+typedef struct view_s view_t;
 
-sted_result_t sted_view_create(sted_kind_t *, void *, u64);
+result_t view_create(kind_t *, void *, u64);
 
-sted_result_t sted_view_destroy(sted_view_t *);
+result_t view_destroy(view_t *);
 
-sted_result_t sted_view_get(sted_view_t *, u64);
+result_t view_get(view_t *, u64);
 
-#define sted_view_each_as(view, var, body)                                     \
+#define view_each_as(view, var, body)                                          \
   for (u64 __i = 0; __i < view->len; __i++) {                                  \
-    void *var = view->data + __i * sted_size(view);                            \
+    void *var = view->data + __i * size(view);                                 \
     body;                                                                      \
   }
 
 /* ------------ DICTIONARIES------------ */
-typedef struct sted_dict_s sted_dict_t;
+typedef struct dict_s dict_t;
 
-sted_result_t sted_dict_create(sted_kind_t *, sted_kind_t *);
+result_t dict_create(kind_t *, kind_t *);
 
-sted_result_t sted_dict_destroy(sted_dict_t *);
+result_t dict_destroy(dict_t *);
 
-boolean sted_dict_has_key(sted_dict_t *, void *);
+boolean dict_has_key(dict_t *, void *);
 
-sted_result_t sted_dict_set(sted_dict_t *, void *, void *);
+result_t dict_set(dict_t *, void *, void *);
 
-sted_result_t sted_dict_get(sted_dict_t *, void *);
+result_t dict_get(dict_t *, void *);
 
-#define STED_DICT_LOAD 0.7
+#define DICT_LOAD 0.7
 
-#define sted_dict_each_as(d, key, val, body)                                   \
+#define dict_each_as(d, key, val, body)                                        \
   for (u64 __i = 0; __i < d->cap; __i++) {                                     \
     u8 *__bucket = d->data + __i * d->internal_kind.item_size;                 \
     void *key = __bucket + 1;                                                  \
@@ -203,47 +232,71 @@ sted_result_t sted_dict_get(sted_dict_t *, void *);
       body;                                                                    \
   }
 
+//////////////////////////////
+//                          //
+//        FILE I/O          //
+//                          //
+//////////////////////////////
+
+result_t io_readfile(view_t);
+
+//////////////////////////////
+//                          //
+//      IMPLEMENTATION      //
+//                          //
+//////////////////////////////
+
+#define STED_IMPL
+#ifdef STED_IMPL
+
 /* ------------ STRUCT DEFINITIONS ------------ */
-struct sted_kind_s {
+struct kind_s {
   u64 item_size;
-  sted_mem_fn allocator;
-  sted_hash_fn hasher;
+  mem_fn allocator;
+  hash_fn hasher;
 
   void *user_data;
   const char *user_name;
 };
 
-struct sted_result_s {
-  sted_code_k status;
+struct result_s {
+  code_k status;
   void *data;
 };
 
-struct sted_view_s {
-  sted_kind_t *kind;
+struct slice_s {
+  kind_t *kind;
+
+  u64 len;
+  u8 data[];
+};
+
+struct view_s {
+  kind_t *kind;
 
   u8 *data;
   u64 len;
 };
 
-struct sted_slice_s {
-  sted_kind_t *kind;
+struct array_s {
+  kind_t *kind;
 
   u8 *data;
   u64 len;
   u64 cap;
 };
 
-struct sted_dict_s {
+struct dict_s {
   u8 *data;
   u64 cap;
   u64 len;
-  sted_kind_t *key_kind;
-  sted_kind_t *val_kind;
-  sted_kind_t internal_kind;
+  kind_t *key_kind;
+  kind_t *val_kind;
+  kind_t internal_kind;
 };
 
 #define vec_union_2def(type)                                                   \
-  union sted_v2_##type##_s {                                                   \
+  union v2_##type##_s {                                                        \
     struct {                                                                   \
       type x;                                                                  \
       type y;                                                                  \
@@ -253,7 +306,7 @@ struct sted_dict_s {
   }
 
 #define vec_union_3def(type)                                                   \
-  union sted_v3_##type##_s {                                                   \
+  union v3_##type##_s {                                                        \
     struct {                                                                   \
       type x;                                                                  \
       type y;                                                                  \
@@ -264,7 +317,7 @@ struct sted_dict_s {
   }
 
 #define vec_union_4def(type)                                                   \
-  union sted_v4_##type##_s {                                                   \
+  union v4_##type##_s {                                                        \
     struct {                                                                   \
       type w;                                                                  \
       type x;                                                                  \
@@ -292,43 +345,40 @@ vec_eachtype(vec_union_defs);
 #undef vec_eachtype
 #undef vec_eachtypesize
 
-#ifdef STED_IMPL
-
-function i32 sted_fail(const char *file, const u32 line, const char *fmt) {
+function i32 fail(const char *file, const u32 line, const char *fmt) {
   fprintf(stderr, "Assertion failed in %s at line %u\nReason: %s\n", file, line,
           fmt);
   exit(1);
   return 1;
 }
 
-function sted_result_t sted_mem_default(const sted_kind_t *kind, void *ptr,
-                                        u64 len) {
+function result_t mem_default(const kind_t *kind, void *ptr, u64 len) {
 
   if (len == 0) {
     free(ptr);
-    return sted_ok(NULL);
+    return ok(NULL);
   }
 
   void *result = realloc(ptr, kind->item_size * len);
 
   if (result == NULL)
-    return sted_err(STED_MEMORY_ERR);
+    return err(MEMORY_ERR);
 
-  return sted_ok(result);
+  return ok(result);
 }
 
-function sted_result_t grow_slice(sted_slice_t *self) {
+function result_t grow_array(array_t *self) {
 
   self->cap *= 2;
 
-  sted_result_t result = sted_alloc(self->kind, self->data, self->cap);
+  result_t result = alloc(self->kind, self->data, self->cap);
 
-  self->data = sted_unwrap(u8, result);
+  self->data = unwrap(u8, result);
 
-  return sted_ok(NULL);
+  return ok(NULL);
 }
 
-function sted_result_t grow_dict(sted_dict_t *self) {
+function result_t grow_dict(dict_t *self) {
 
   // Save a ref to the old array of data.
   u8 *old_data = self->data;
@@ -338,9 +388,9 @@ function sted_result_t grow_dict(sted_dict_t *self) {
   self->cap *= 2;
   self->len = 0;
 
-  sted_result_t result = sted_alloc(&self->internal_kind, NULL, self->cap);
+  result_t result = alloc(&self->internal_kind, NULL, self->cap);
 
-  self->data = sted_unwrap(u8, result);
+  self->data = unwrap(u8, result);
 
   // For each kvp in the old array, insert it into the new dict.
   for (u64 i = 0; i < old_cap; i++) {
@@ -349,22 +399,21 @@ function sted_result_t grow_dict(sted_dict_t *self) {
     void *val = bucket + 1 + self->key_kind->item_size;
 
     if (bucket[0]) {
-      sted_dict_set(self, key, val);
+      dict_set(self, key, val);
     }
   }
 
-  sted_try(sted_alloc(&self->internal_kind, old_data, 0));
+  try(alloc(&self->internal_kind, old_data, 0));
 
-  return sted_ok(NULL);
+  return ok(NULL);
 }
 
-/* ------------ SLICES ------------ */
+/* ------------ arrayS ------------ */
 
-function sted_result_t sted_slice_create(sted_kind_t *kind) {
+function result_t array_create(kind_t *kind) {
   assert(kind->allocator != NULL);
 
-  sted_slice_t *self =
-      sted_unwrap(sted_slice_t, sted_alloc(kind, NULL, sizeof(sted_slice_t)));
+  array_t *self = unwrap(array_t, alloc(kind, NULL, sizeof(array_t)));
 
   // If the allocation fails, the try will crash the program.
 
@@ -372,129 +421,152 @@ function sted_result_t sted_slice_create(sted_kind_t *kind) {
   self->len = 0;
   self->cap = 2;
 
-  self->data =
-      sted_unwrap(u8, self->kind->allocator(self->kind, NULL, self->cap));
+  self->data = unwrap(u8, self->kind->allocator(self->kind, NULL, self->cap));
 
-  return sted_ok(self);
+  return ok(self);
 }
 
-function sted_result_t sted_slice_destroy(sted_slice_t *self) {
+function result_t array_destroy(array_t *self) {
 
-  sted_alloc(self->kind, self->data, 0);
-  sted_alloc(self->kind, self, 0);
+  alloc(self->kind, self->data, 0);
+  alloc(self->kind, self, 0);
 
-  return sted_ok(NULL);
+  return ok(NULL);
 }
 
-function sted_result_t sted_slice_emplace(sted_slice_t *self, void *data) {
+function result_t array_emplace(array_t *self, void *data) {
   if (self->len == self->cap) {
-    sted_try(grow_slice(self));
+    try(grow_array(self));
   }
 
   u8 *new_item = self->data + self->kind->item_size * self->len++;
 
   memcpy(new_item, data, self->kind->item_size);
 
-  return sted_ok(new_item);
+  return ok(new_item);
 }
 
-function sted_result_t sted_slice_append(sted_slice_t *self) {
+function result_t array_append(array_t *self) {
   if (self->len == self->cap) {
-    sted_try(grow_slice(self));
+    try(grow_array(self));
   }
 
   u8 *new_item = self->data + self->kind->item_size * self->len++;
 
-  return sted_ok(new_item);
+  return ok(new_item);
 }
 
-function sted_result_t sted_slice_pop(sted_slice_t *self) {
+function result_t array_pop(array_t *self) {
   if (self->len == 0) {
-    return sted_err(STED_BOUNDS_ERR);
+    return err(BOUNDS_ERR);
   }
 
   self->len--;
-  return sted_ok(self->data + self->kind->item_size * self->len);
+  return ok(self->data + self->kind->item_size * self->len);
 }
 
-function sted_result_t sted_slice_get(sted_slice_t *self, u64 offset) {
+function result_t array_get(array_t *self, u64 offset) {
   if (offset >= self->len) {
-    return sted_err(STED_BOUNDS_ERR);
+    return err(BOUNDS_ERR);
   }
 
-  return sted_ok(self->data + self->kind->item_size * offset);
+  return ok(self->data + self->kind->item_size * offset);
 }
 
-function sted_result_t sted_slice_set(sted_slice_t *self, u64 offset,
-                                      void *data) {
+function result_t array_set(array_t *self, u64 offset, void *data) {
   if (offset >= self->len) {
-    return sted_err(STED_BOUNDS_ERR);
+    return err(BOUNDS_ERR);
   }
 
   void *dest = memcpy(self->data + self->kind->item_size * offset, data,
                       self->kind->item_size);
 
-  return sted_ok(dest);
+  return ok(dest);
 }
 
-function sted_result_t sted_slice_view(sted_slice_t *self, u64 offset,
-                                       u64 len) {
+function result_t array_view(array_t *self, u64 offset, u64 len) {
 
   if (len + offset > self->len) {
-    return sted_err(STED_BOUNDS_ERR);
+    return err(BOUNDS_ERR);
   }
 
-  sted_view_t *view = sted_unwrap(
-      sted_view_t, sted_alloc(self->kind, NULL, sizeof(sted_view_t)));
+  view_t *view = unwrap(view_t, alloc(self->kind, NULL, sizeof(view_t)));
 
   view->kind = self->kind;
   view->data = self->data + self->kind->item_size * offset;
   view->len = len;
 
-  return sted_ok(view);
+  return ok(view);
 }
 
 /* ------------ VIEWS ------------ */
 
-function sted_result_t sted_view_create(sted_kind_t *kind, void *data,
-                                        u64 len) {
+function result_t view_create(kind_t *kind, void *data, u64 len) {
   assert(kind->allocator != NULL);
 
-  sted_view_t *self =
-      sted_unwrap(sted_view_t, sted_alloc(kind, NULL, sizeof(sted_view_t)));
+  view_t *self = unwrap(view_t, alloc(kind, NULL, sizeof(view_t)));
 
   self->data = (u8 *)data;
   self->len = len;
 
-  return sted_ok(self);
+  return ok(self);
 };
 
-function sted_result_t sted_view_destroy(sted_view_t *self) {
-  sted_try(self->kind->allocator(self->kind, self, 0));
+function result_t view_destroy(view_t *self) {
+  try(self->kind->allocator(self->kind, self, 0));
 
-  return sted_ok(NULL);
+  return ok(NULL);
 };
 
-function sted_result_t sted_view_get(sted_view_t *self, u64 offset) {
+function result_t view_get(view_t *self, u64 offset) {
   if (offset >= self->len) {
-    return sted_err(STED_BOUNDS_ERR);
+    return err(BOUNDS_ERR);
   }
 
-  return sted_ok(self->data + self->kind->item_size * offset);
+  return ok(self->data + self->kind->item_size * offset);
 };
 
-/* ------------ DICTIONARIES------------ */
-function sted_result_t sted_dict_create(sted_kind_t *val_kind,
-                                        sted_kind_t *key_kind) {
+/* ------------ SLICES ------------ */
 
-  sted_kind_t internal_kind = {
+function result_t slice_create(kind_t *kind, const u8 *data, u64 len) {
+
+  result_t res =
+      kind->allocator(kind, NULL, sizeof(array_t) + (len * kind->item_size));
+
+  array_t *self = unwrap(array_t, res);
+
+  self->kind = kind;
+  self->len = len;
+
+  copy(kind, self->data, data, len);
+
+  return ok(self);
+}
+
+function result_t slice_destroy(slice_t *self) {
+  try(alloc(self->kind, self, 0));
+
+  return ok(NULL);
+}
+
+function result_t slice_get(slice_t *self, u64 offset) {
+  if (offset >= self->len) {
+    return err(BOUNDS_ERR);
+  }
+
+  return ok(self->data + self->kind->item_size * offset);
+}
+
+/* ------------ DICTIONARIES------------ */
+function result_t dict_create(kind_t *val_kind, kind_t *key_kind) {
+
+  kind_t internal_kind = {
       .item_size = val_kind->item_size + key_kind->item_size + 1,
       .allocator = key_kind->allocator,
       .user_name = "__internal_kind__",
   };
 
-  sted_dict_t *self = sted_unwrap(
-      sted_dict_t, sted_alloc(&internal_kind, NULL, sizeof(sted_dict_t)));
+  dict_t *self = unwrap(dict_t, alloc(&internal_kind, NULL, sizeof(dict_t)));
 
   self->internal_kind = internal_kind;
   self->key_kind = key_kind;
@@ -502,34 +574,29 @@ function sted_result_t sted_dict_create(sted_kind_t *val_kind,
   self->len = 0;
   self->cap = 8;
 
-  self->data =
-      sted_unwrap(u8, sted_alloc(&self->internal_kind, NULL, self->cap));
+  self->data = unwrap(u8, alloc(&self->internal_kind, NULL, self->cap));
 
-  return sted_ok(self);
+  return ok(self);
 };
 
-function boolean dict_has_key(sted_dict_t *self, u64 index) {
+function boolean dict_has_key(dict_t *self, void *key) {
+  u64 index = hash(self->key_kind, key) % self->cap;
   return *(self->data + self->internal_kind.item_size * index);
-}
-
-function boolean sted_dict_has_key(sted_dict_t *self, void *key) {
-  u64 index = sted_hash(self->key_kind, key) % self->cap;
-  return dict_has_key(self, index);
 };
 
-function sted_result_t sted_dict_destroy(sted_dict_t *self) {
+function result_t dict_destroy(dict_t *self) {
   self->internal_kind.allocator(&self->internal_kind, self->data, 0);
   free(self);
-  return sted_ok(NULL);
+  return ok(NULL);
 }
 
-function sted_result_t sted_dict_set(sted_dict_t *self, void *key, void *val) {
+function result_t dict_set(dict_t *self, void *key, void *val) {
 
-  if (self->len > self->cap * STED_DICT_LOAD) {
+  if (self->len > self->cap * DICT_LOAD) {
     grow_dict(self);
   }
 
-  size_t index = sted_hash(self->key_kind, key) % self->cap;
+  size_t index = hash(self->key_kind, key) % self->cap;
   u8 *bucket = self->data + self->internal_kind.item_size * index;
 
   if (bucket[0]) {
@@ -544,7 +611,7 @@ function sted_result_t sted_dict_set(sted_dict_t *self, void *key, void *val) {
       bucket = self->data + self->internal_kind.item_size * ++index;
 
       if (bucket >= self->data + self->internal_kind.item_size * self->cap) {
-        return sted_err(STED_WRAP_ERR);
+        return err(WRAP_ERR);
       }
     }
   }
@@ -561,34 +628,36 @@ function sted_result_t sted_dict_set(sted_dict_t *self, void *key, void *val) {
          self->val_kind->item_size);
 
   // Return a pointer to the set value.
-  return sted_ok(bucket + 1 + self->key_kind->item_size);
+  return ok(bucket + 1 + self->key_kind->item_size);
 }
 
-function sted_result_t sted_dict_get(sted_dict_t *self, void *key) {
-  size_t index = sted_hash(self->key_kind, key) % self->cap;
+function result_t dict_get(dict_t *self, void *key) {
+  size_t index = hash(self->key_kind, key) % self->cap;
   u8 *bucket = self->data + self->internal_kind.item_size * index;
 
-  if (!dict_has_key(self, index)) {
+  boolean has_key = *(self->data + self->internal_kind.item_size * index);
+
+  if (!has_key) {
     // The key does not exist
-    return sted_ok(NULL);
+    return ok(NULL);
   }
 
   // memcmp the given key and the key we have to make sure its a match
   while (memcmp(bucket + 1, key, self->key_kind->item_size) != 0) {
     // return a pointer into the bucket at the value's position.
     if (bucket >= self->data + self->internal_kind.item_size * self->cap) {
-      return sted_err(STED_WRAP_ERR);
+      return err(WRAP_ERR);
     }
 
     // Chain the buckets
     bucket = self->data + self->internal_kind.item_size * ++index;
   }
 
-  return sted_ok(bucket + self->key_kind->item_size + 1);
+  return ok(bucket + self->key_kind->item_size + 1);
 }
 
 /* ------------ VECTORS ------------ */
-#define vec_name(type, size) sted_v##size##_##type##_t
+#define vec_name(type, size) v##size##_##type##_t
 
 #define vec_eachtype(macro, ...)                                               \
   macro(i32, __VA_ARGS__);                                                     \
@@ -604,39 +673,39 @@ function sted_result_t sted_dict_get(sted_dict_t *self, void *key) {
   vec_eachtype(macro, 4, __VA_ARGS__)
 
 #define vec_bin_def(type, name, op)                                            \
-  function vec_name(type, 2) sted_##v2##_##type##_##name##v(                   \
-      vec_name(type, 2) a, vec_name(type, 2) b) {                              \
+  function vec_name(type, 2)                                                   \
+      v2##_##type##_##name##v(vec_name(type, 2) a, vec_name(type, 2) b) {      \
     return (vec_name(type, 2)){.x = a.x op b.x, .y = a.y op b.y};              \
   }                                                                            \
-  function vec_name(type, 3) sted_##v3##_##type##_##name##v(                   \
-      vec_name(type, 3) a, vec_name(type, 3) b) {                              \
+  function vec_name(type, 3)                                                   \
+      v3##_##type##_##name##v(vec_name(type, 3) a, vec_name(type, 3) b) {      \
     return (vec_name(type, 3)){                                                \
         .x = a.x op b.x, .y = a.y op b.y, .z = a.z op b.z};                    \
   }                                                                            \
-  function vec_name(type, 4) sted_##v4##_##type##_##name##v(                   \
-      vec_name(type, 4) a, vec_name(type, 4) b) {                              \
+  function vec_name(type, 4)                                                   \
+      v4##_##type##_##name##v(vec_name(type, 4) a, vec_name(type, 4) b) {      \
     return (vec_name(type, 4)){                                                \
         .w = a.w op b.w, .x = a.x op b.x, .y = a.y op b.y, .z = a.z op b.z};   \
   }
 
 #define vec_constant_def(type, name, op)                                       \
   function vec_name(type, 2)                                                   \
-      sted_##v2##_##type##_##name(vec_name(type, 2) a, type b) {               \
+      v2##_##type##_##name(vec_name(type, 2) a, type b) {                      \
     return (vec_name(type, 2)){.x = a.x op b, .y = a.y op b};                  \
   }                                                                            \
   function vec_name(type, 3)                                                   \
-      sted_##v3##_##type##_##name(vec_name(type, 3) a, type b) {               \
+      v3##_##type##_##name(vec_name(type, 3) a, type b) {                      \
     return (vec_name(type, 3)){.x = a.x op b, .y = a.y op b, .z = a.z op b};   \
   }                                                                            \
   function vec_name(type, 4)                                                   \
-      sted_##v4##_##type##_##name(vec_name(type, 4) a, type b) {               \
+      v4##_##type##_##name(vec_name(type, 4) a, type b) {                      \
     return (vec_name(type, 4)){                                                \
         .w = a.w op b, .x = a.x op b, .y = a.y op b, .z = a.z op b};           \
   }
 
 #define vec_dot_def(type, size, args)                                          \
-  function type sted_##v##size##_##type##_dot(vec_name(type, size) a,          \
-                                              vec_name(type, size) b) {        \
+  function type v##size##_##type##_dot(vec_name(type, size) a,                 \
+                                       vec_name(type, size) b) {               \
     type result = 0;                                                           \
     for (i32 i = 0; i < size; i++)                                             \
       result += a.type##s[i] * b.type##s[i];                                   \
@@ -659,6 +728,10 @@ vec_eachtypesize(vec_dot_def);
 #undef vec_name
 #undef vec_eachtype
 #undef vec_eachtypesize
+
+/* ------------ FILE IO ------------ */
+
+result_t io_readfile(view_t path) {}
 
 #endif
 
