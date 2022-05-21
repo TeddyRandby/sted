@@ -45,6 +45,8 @@ typedef double f64;
 
 #define function extern inline
 
+#define loop while (true)
+
 /* ------------ RUNTIME ASSERTION ------------ */
 i32 fail(const char *file, const u32 line, const char *fmt);
 
@@ -238,7 +240,7 @@ result_t dict_get(dict_t *, void *);
 //                          //
 //////////////////////////////
 
-result_t io_readfile(view_t);
+result_t io_readfile(view_t *);
 
 //////////////////////////////
 //                          //
@@ -346,8 +348,7 @@ vec_eachtype(vec_union_defs);
 #undef vec_eachtypesize
 
 function i32 fail(const char *file, const u32 line, const char *fmt) {
-  fprintf(stderr, "Assertion failed in %s at line %u\nReason: %s\n", file, line,
-          fmt);
+  fprintf(stderr, "Panic in %s at line %u\nReason: %s\n", file, line, fmt);
   exit(1);
   return 1;
 }
@@ -506,6 +507,7 @@ function result_t view_create(kind_t *kind, void *data, u64 len) {
 
   view_t *self = unwrap(view_t, alloc(kind, NULL, sizeof(view_t)));
 
+  self->kind = kind;
   self->data = (u8 *)data;
   self->len = len;
 
@@ -731,7 +733,30 @@ vec_eachtypesize(vec_dot_def);
 
 /* ------------ FILE IO ------------ */
 
-result_t io_readfile(view_t path) {}
+function result_t io_readfile(view_t *path) {
+  check(path->kind->item_size == 1, "Path should have a kind with size 1");
+
+  FILE *file = fopen(cast(char, path->data), "r");
+
+  check(file != NULL, "File could not be opened");
+
+  char ch;
+
+  array_t *result = unwrap(array_t, array_create(path->kind));
+
+  loop {
+    ch = fgetc(file);
+
+    array_emplace(result, &ch);
+
+    if (ch == EOF)
+      break;
+  }
+
+  fclose(file);
+
+  return ok(result);
+}
 
 #endif
 

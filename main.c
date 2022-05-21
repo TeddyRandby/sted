@@ -2,12 +2,19 @@
 #include "src/sted.h"
 
 u64 hash_int(const kind_t *k, void *i) { return *cast(i32, i); }
+u64 hash_char(const kind_t *k, void *i) { return *cast(char, i); }
 
 i32 main() {
   kind_t int_kind = {
       .item_size = sizeof(i32),
       .allocator = mem_default,
       .hasher = hash_int,
+  };
+
+  kind_t char_kind = {
+      .item_size = sizeof(char),
+      .allocator = mem_default,
+      .hasher = hash_char,
   };
 
   array_t *ints = unwrap(array_t, array_create(&int_kind));
@@ -76,4 +83,15 @@ i32 main() {
   printf("{ %lf, %lf }\n", fs.x, fs.y);
 
   printf("%lf\n", v2_f64_dot(fs, fs));
+
+  char *path_name = "../README.md";
+
+  view_t *path =
+      unwrap(view_t, view_create(&char_kind, path_name, strlen(path_name)));
+
+  printf("%lu\n", path->kind->item_size);
+
+  array_t *readme = unwrap(array_t, io_readfile(path));
+
+  array_each_as(readme, i, printf("%c", *cast(char, i)));
 }
